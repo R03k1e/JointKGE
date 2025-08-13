@@ -13,4 +13,4 @@ To train a new model, you can run:
 python run.py
 ```
 
-Part of the code was developed with the help of [pykg2vec](https://github.com/Sujit-O/pykg2vec) and [HAKE](https://github.com/MIRALab-USTC/KGE-HAKE)
+Part of the code was developed with the help of [pykg2vec](https://github.com/Sujit-O/pykg2vec)
