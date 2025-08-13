@@ -1,7 +1,4 @@
-# SR-KGE
 
-## Overview 
-This is the sample dataset and code for the work "GeoEntity-type constrained knowledge graph embedding for link predictions of natural language spatial relations"
 
 ## Requirements
 This project is built upon [PyTorch](https://pytorch.org) framework. Please check the official installation guide to install PyTorch.
