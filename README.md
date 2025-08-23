@@ -1,5 +1,3 @@
-# LEBERT-基于词汇信息融合的中文命名实体识别模型
-
 
 1. Overview
 JT-KGE is designed for jointly learning:
