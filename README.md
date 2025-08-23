@@ -1,63 +1,48 @@
-# JT-KGE: A Joint Knowledge Graph Embedding Framework
+# JT-KGE: A Joint Knowledge-Graph Embedding Framework
 
-**JT-KGE** (Joint Type-based Knowledge Graph Embedding) is a flexible and extensible PyTorch framework for learning representations of entities, relations, and types in Knowledge Graphs (KGs). It supports multiple embedding models (e.g., TransE, RotatE, HAKE, DistMult, TransD, ComplEx, CompoundE) and jointly trains instance-level and type-level information.
+**JT-KGE** (Joint Type-based Knowledge Graph Embedding) is a flexible PyTorch framework for learning entity, relation and type representations in Knowledge Graphs. It supports **TransE, RotatE, HAKE, DistMult, TransD, ComplEx** and **CompoundE**, and performs **joint training** over instance-level triples, type-level triples and entity-type pairs.
 
 ---
 
 ## 1. Overview
+- **Instance-level embeddings** (G-ins): relations between entities  
+- **Type-level embeddings** (G-type): taxonomic relations between types  
+- **Entity–type pairs** (P-type): membership of entities in semantic types  
 
-JT-KGE is designed for **jointly learning**:
-- **Instance-level embeddings**: Capturing relations between entities.
-- **Type-level embeddings**: Capturing hierarchical types of entities.
-- **Entity-type associations**: Linking entities to their semantic types.
-
-The framework supports **adversarial negative sampling**, **early stopping**, and **comprehensive evaluation metrics** (MR, MRR, Hits@k).
+Includes adversarial negative sampling, early stopping and comprehensive link-prediction metrics (MR, MRR, Hits@k).
 
 ---
 
 ## 2. Features
-
-- **Multiple Embedding Models**:
-  - TransE, RotatE, HAKE, DistMult, TransD, ComplEx, CompoundE
-- **Joint Training**:
-  - Instance-level (`G-ins`), type-level (`G-type`), and entity-type pairs (`P-type`)
-- **Efficient Negative Sampling**:
-  - Self-adversarial sampling with subsampling weights
-- **Evaluation Metrics**:
-  - Mean Rank (MR), Filtered MR, MRR, Filtered MRR, Hits@k
-- **Early Stopping**:
-  - Monitors filtered MR or MRR with configurable patience
-- **Model Saving & Loading**:
-  - Save/load checkpoints and embeddings
+- **7 embedding models** out-of-the-box  
+- **Joint training** with tunable weighting  
+- **Self-adversarial negative sampling**  
+- **Early stopping** on filtered MR or MRR  
+- **Automatic checkpointing & embedding export**
 
 ---
 
-## 3. Project Structure
-
+## 3. Repository Structure
 ```
 JT-KGE/
-├── data_helper.py      # Data loading and preprocessing
-├── model.py            # Embedding models (TransE, RotatE, etc.)
-├── loss.py             # Loss functions (MarginLoss, LogisticLoss)
-├── optimizer.py        # Optimizer wrapper (Adam, Adagrad, SGD)
-├── evaluator.py        # Evaluation metrics and testing
-├── earlystopper.py     # Early stopping logic
-├── train.py            # Training loop and trainer classes
-├── run.py              # Entry point for experiments
-├── utils.py            # Utilities (e.g., Monitor enum)
-└── README.md           # This file
+├── data_helper.py   # data loading & indexing
+├── model.py         # all embedding models
+├── loss.py          # MarginLoss / LogisticLoss
+├── optimizer.py     # Adam / Adagrad / SGD wrapper
+├── evaluator.py     # link-prediction metrics
+├── earlystopper.py  # patience-based early stop
+├── train.py         # training loop
+├── run.py           # CLI entry point
+├── utils.py
+├── model/           # pre-trained weights (optional)
+├── sample_data/     # toy dataset
+├── results/         # experimental logs
+└── README.md
 ```
 
 ---
 
 ## 4. Installation
-
-### Requirements
-- Python ≥3.7
-- PyTorch ≥1.8
-- tqdm, numpy, pandas
-
-### Install
 ```bash
 pip install torch tqdm numpy pandas
 ```
@@ -66,110 +51,90 @@ pip install torch tqdm numpy pandas
 
 ## 5. Quick Start
 
-### 5.1 Prepare Data
-Organize your data into the following files:
+### 5.1 Data Format  
+Place files in `sample_data/`:
+
 ```
 sample_data/
-├── train.txt          # Instance-level triplets (h, r, t, h_type, t_type)
+├── train.txt          # h r t h_type t_type
 ├── valid.txt
 ├── test.txt
-├── train_type.txt     # Type-level triplets (h, r, t)
+├── train_type.txt     # h r t  (type-level)
 ├── valid_type.txt
-├── test_type.txt
+└── test_type.txt
 ```
 
-### 5.2 Run Training
+### 5.2 Train a Model
 ```bash
 python run.py --method CompoundE --device cuda
 ```
 
 ### 5.3 Key Arguments
-| Argument         | Description                          | Default |
-|------------------|--------------------------------------|---------|
-| `--method`       | Embedding model (transe/rotate/hake) | `DistMult` |
-| `--epochs`       | Training epochs                      | `200`   |
-| `--dim_ins`      | Instance embedding dimension         | `200`   |
-| `--dim_type`     | Type embedding dimension             | `200`   |
-| `--batch_size_*` | Batch sizes for ins/type/pair        | `256`   |
-| `--lr`           | Learning rate                        | `0.001` |
-| `--neg_rate`     | Negative samples per positive        | `5`     |
-| `--patience`     | Early stopping patience              | `3`     |
+| Flag            | Description                 | Default |
+|-----------------|-----------------------------|---------|
+| `--method`      | transe / rotate / hake / ... | DistMult |
+| `--epochs`      | training epochs             | 200     |
+| `--dim_ins`     | entity/relation dim         | 200     |
+| `--dim_type`    | type dim                    | 200     |
+| `--lr`          | learning rate               | 0.001   |
+| `--neg_rate`    | negative samples / pos      | 5       |
+| `--patience`    | early-stop patience         | 3       |
 
 ---
 
 ## 6. Usage Examples
-
-### 6.1 Train with RotatE
 ```bash
+# Train RotatE
 python run.py --method rotate --dim_ins 400 --lr 0.0001 --device cuda
-```
 
-### 6.2 Resume Training
-```bash
+# Resume from checkpoint
 python run.py --method CompoundE --load_model ./model/CompoundE/savefold_name
-```
-
-### 6.3 Evaluate Saved Model
-```python
-from train import Join_trainer
-from data_helper import GeoKG
-
-args = GeoKGArgparse(['--method', 'HAKE', '--device', 'cuda'])
-trainer = Join_trainer(args)
-trainer.build(GeoKG())
-trainer.evaluator.full_test()
 ```
 
 ---
 
 ## 7. Output Files
-
-After training, the following are saved in `./model/{method}/{save_times}/`:
-- `ins_model.vec.pt`: Instance-level model
-- `type_model.vec.pt`: Type-level model
-- `pair_model.vec.pt`: Entity-type model
-- `ent_labels.tsv`: Entity ID mappings
-- `rel_labels.tsv`: Relation ID mappings
-- `type_*_labels.tsv`: Type ID mappings
-- `*_Training_results_*.csv`: Training losses
-- `*_Eval_results_*.csv`: Evaluation metrics
-- `config.npy`: Training arguments
+After training, `./model/{method}/{save_times}/` contains:
+- `ins_model.vec.pt`, `type_model.vec.pt`, `pair_model.vec.pt`  
+- `*_labels.tsv` (id → name)  
+- `*_Training_results_*.csv` & `*_Eval_results_*.csv`  
+- `config.npy`
 
 ---
 
 ## 8. Extending the Framework
-
-### 8.1 Add a New Model
-1. Implement a new class in `model.py` (e.g., `ins_model_new`, `type_model_new`).
-2. Add initialization in `Join_trainer.build()`.
-
-### 8.2 Custom Loss Function
-1. Add a new loss class in `loss.py` inheriting from `Loss`.
-2. Override `forward()` method.
-
-### 8.3 New Evaluation Metrics
-1. Modify `evaluator.py` to compute additional metrics.
-2. Update `Metric.settle()` and `display_summary()`.
+1. **New model**: inherit `nn.Module` in `model.py` and register in `Join_trainer.build()`.  
+2. **Custom loss**: subclass `Loss` in `loss.py`.  
+3. **New metrics**: modify `evaluator.py`.
 
 ---
 
-## 9. Citation
-If you use this framework, please cite:
-```
-@misc{jt-kge,
-  title={JT-KGE: A Joint Type-based Knowledge Graph Embedding Framework},
-  author={Your Name},
-  year={2023},
-  url={https://github.com/your-repo/JT-KGE}
-}
-```
+## 9. Experimental Results
+
+Link-prediction on the provided benchmark:
+
+| Model               | MR↓   | MRR↑  | Hits@1↑ | Hits@3↑ | Hits@5↑ | Hits@10↑ |
+|---------------------|-------|-------|---------|---------|---------|----------|
+| **CompoundE (ours)**| **9.86** | **0.308** | **0.173** | **0.328** | **0.435** | **0.639** |
+| HAKE (ours)         | 12.24 | 0.261 | 0.137 | 0.264 | 0.349 | 0.542 |
+| TransE (ours)       | 14.42 | 0.262 | 0.149 | 0.262 | 0.338 | 0.521 |
+| RotatE (ours)       | 14.76 | 0.232 | 0.125 | 0.233 | 0.306 | 0.439 |
+| DistMult (ours)     | 17.42 | 0.248 | 0.151 | 0.250 | 0.329 | 0.329 |
+| ComplEx (ours)      | 0.16  | 0.271 | 0.176 | 0.262 | 0.349 | 0.481 |
+
+Comparison with original baselines:
+
+| Model        | MR↓   | MRR↑  | Hits@1↑ | Hits@3↑ | Hits@5↑ | Hits@10↑ |
+|--------------|-------|-------|---------|---------|---------|----------|
+| CompoundE    | 15.77 | 0.255 | 0.134 | 0.255 | 0.340 | 0.537 |
+| HAKE         | 13.54 | 0.262 | 0.143 | 0.277 | 0.359 | 0.503 |
+| TransE       | 16.28 | 0.265 | 0.164 | 0.259 | 0.339 | 0.485 |
+| RotatE       | 16.15 | 0.203 | 0.104 | 0.192 | 0.262 | 0.402 |
+| DistMult     | 18.10 | 0.240 | 0.146 | 0.243 | 0.301 | 0.410 |
+| ComplEx      | 15.28 | 0.263 | 0.164 | 0.265 | 0.346 | 0.468 |
+
+> Bold numbers denote best performance in our reproduction.  
+> “(ours)” indicates results reproduced and fine-tuned within JT-KGE.
 
 ---
 
-## 10. License
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## 11. Support
-For issues or questions, open a GitHub issue or contact `your-email@example.com`.
