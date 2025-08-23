@@ -21,6 +21,7 @@ Model Saving & Loading:
 Save/load checkpoints and embeddings
 
 3. Project Structure
+
 JT-KGE/
 ├─ README.md
 ├─ run.py
