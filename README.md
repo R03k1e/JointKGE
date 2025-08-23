@@ -21,7 +21,7 @@ Model Saving & Loading:
 Save/load checkpoints and embeddings
 
 3. Project Structure
-
+**
 JT-KGE/
 ├─ README.md
 ├─ run.py
@@ -51,7 +51,7 @@ JT-KGE/
 ├─ evaluator.py
 ├─ earlystopper.py
 └─ utils.py
-
+**
 4. Installation
 Requirements
 Python ≥3.7
@@ -64,6 +64,7 @@ pip install torch tqdm numpy pandas
 
 5.1 Prepare Data
 Organize your data into the following files:
+**
 sample_data/
 ├── train.txt          # Instance-level triplets (h, r, t, h_type, t_type)
 ├── valid.txt
@@ -71,7 +72,7 @@ sample_data/
 ├── train_type.txt     # Type-level triplets (h, r, t)
 ├── valid_type.txt
 ├── test_type.txt
-
+**
 5.2 Run Training
 python run.py --method CompoundE --device cuda
 
