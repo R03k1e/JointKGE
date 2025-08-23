@@ -36,7 +36,6 @@ JT-KGE/
 ├── utils.py
 ├── model/           # pre-trained weights (optional)
 ├── sample_data/     # toy dataset
-├── results/         # experimental logs
 └── README.md
 ```
 
