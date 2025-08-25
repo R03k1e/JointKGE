@@ -14,18 +14,33 @@ from data_helper import BatchType
 
 import importlib
 
+# Get logger for current module
 log = logging.getLogger(__name__)
 
 
 class Trainer(nn.Module):
+    """Base trainer class providing common training functionality and batch generation methods"""
     def __init__(self):
         super().__init__()
-        self.GeoKG = None
-        self.training_results = []
-        self.eval_results = []
-        self.step = 0
+        self.GeoKG = None  # Knowledge graph data structure
+        self.training_results = []  # Store training results
+        self.eval_results = []  # Store evaluation results
+        self.step = 0  # Training step counter
 
     def gen_batch_ins(self, batch_num, batch_size, neg_rate, forever=False, shuffle=True):
+        """
+        Generate instance-level training batches with negative sampling
+        
+        Args:
+            batch_num: Number of batches to generate
+            batch_size: Size of each batch
+            neg_rate: Negative sampling ratio
+            forever: Whether to generate batches indefinitely
+            shuffle: Whether to shuffle the data
+        
+        Yields:
+            Batch data including positive and negative samples
+        """
         kg = self.GeoKG.triplets_withtype["train"]
         while True:
             if shuffle:
@@ -53,6 +68,19 @@ class Trainer(nn.Module):
                 break
 
     def gen_batch_type(self, batch_num, batch_size, neg_rate, forever=False, shuffle=True):
+        """
+        Generate type-level training batches with negative sampling
+        
+        Args:
+            batch_num: Number of batches to generate
+            batch_size: Size of each batch
+            neg_rate: Negative sampling ratio
+            forever: Whether to generate batches indefinitely
+            shuffle: Whether to shuffle the data
+        
+        Yields:
+            Batch data including positive and negative samples
+        """
         kg_type = self.GeoKG.triplets_type["train"]
         while True:
             if shuffle:
@@ -80,6 +108,19 @@ class Trainer(nn.Module):
                 break
 
     def gen_batch_pair(self, batch_num, batch_size, neg_rate, forever=False, shuffle=True):
+        """
+        Generate entity-type pair training batches with negative sampling
+        
+        Args:
+            batch_num: Number of batches to generate
+            batch_size: Size of each batch
+            neg_rate: Negative sampling ratio
+            forever: Whether to generate batches indefinitely
+            shuffle: Whether to shuffle the data
+        
+        Yields:
+            Batch data including positive and negative samples
+        """
         kg_pair = self.GeoKG.pairs_all["train"]
         while True:
             if shuffle:
@@ -96,6 +137,7 @@ class Trainer(nn.Module):
                 break
 
     def summary(self, args):
+        """Print a summary of training arguments and settings"""
         summary = ["", "------------------Global Setting--------------------"]
         maxspace = len(max(args.__dict__.keys())) + 20
         for key, val in args.__dict__.items():
@@ -108,6 +150,19 @@ class Trainer(nn.Module):
         log.info("\n".join(summary))
 
     def train_batch_transe(self, batch, model, optimizer, alpha, flag):
+        """
+        Train a batch using TransE model
+        
+        Args:
+            batch: Training batch data
+            model: Model to train
+            optimizer: Optimizer for parameter updates
+            alpha: Loss weighting parameter
+            flag: Indicates whether it's instance or type training
+        
+        Returns:
+            Positive loss, negative loss, and total loss
+        """
         if flag == 'ins':
             pos_pred = model(batch['h'], batch['r'], batch['t'], batch_type=BatchType.SINGLE)
             neg_pred = model(batch['neg_h'], batch['neg_r'], batch['neg_t'], batch_type=batch['batch_type'])
@@ -120,6 +175,19 @@ class Trainer(nn.Module):
         return pos_loss, neg_loss, loss
 
     def train_batch_rotate_hake(self, batch, model, optimizer, alpha, flag):
+        """
+        Train a batch using RotatE or HAKE model
+        
+        Args:
+            batch: Training batch data
+            model: Model to train
+            optimizer: Optimizer for parameter updates
+            alpha: Loss weighting parameter
+            flag: Indicates whether it's instance or type training
+        
+        Returns:
+            Positive loss, negative loss, and total loss
+        """
         if flag == 'ins':
             pos_pred = model(batch['h'], batch['r'], batch['t'], batch_type=BatchType.SINGLE)
             neg_pred = model(batch['neg_h'], batch['neg_r'], batch['neg_t'], batch_type=batch['batch_type'])
@@ -132,6 +200,18 @@ class Trainer(nn.Module):
         return pos_loss, neg_loss, loss
 
     def train_batch_pair(self, batch, model, optimizer, alpha):
+        """
+        Train a batch of entity-type pairs
+        
+        Args:
+            batch: Training batch data
+            model: Model to train
+            optimizer: Optimizer for parameter updates
+            alpha: Loss weighting parameter
+        
+        Returns:
+            Positive loss, negative loss, and total loss
+        """
         pos_pred = model(batch['ent_pair'], batch['type_pair'], batch_type=BatchType.SINGLE)
         neg_pred = model(batch['neg_ent_pair'], batch['neg_type_pair'], batch_type=None)
         pos_loss, neg_loss, loss = model.loss(pos_pred, neg_pred, alpha,
@@ -141,36 +221,40 @@ class Trainer(nn.Module):
 
 
 class Join_trainer(Trainer):
+    """Joint trainer class that handles training of instance, type, and pair models together"""
     def __init__(self, args):
         super(Join_trainer, self).__init__()
         self.args = args
-        self.method = args.method
-        self.epochs = args.epochs
-        self.dim_ins = args.dim_ins
-        self.dim_type = args.dim_type
-        self.batch_size_ins = args.batch_size_ins
-        self.batch_size_type = args.batch_size_type
-        self.batch_size_pair = args.batch_size_pair
-        self.model_save_path = Path(args.model_save_path)
-        self.l1 = args.l1
-        self.margin_ins = args.margin_ins
-        self.margin_type = args.margin_type
-        self.margin_pair = args.margin_pair
-        self.fold_ins = args.fold_ins
-        self.fold_type = args.fold_type
-        self.fold_pair = args.fold_pair
-        self.lr = args.lr
-        self.weight_G = args.weight_G
-        self.weight_J = args.weight_J
-        self.device = args.device
-        self.test_step = args.test_step
-        self.best_metric = None
-        self.save_times = args.save_times
-        self.save_path = self.model_save_path / self.method / self.save_times
+        self.method = args.method  # KG embedding method (TransE, RotatE, HAKE, etc.)
+        self.epochs = args.epochs  # Number of training epochs
+        self.dim_ins = args.dim_ins  # Dimension of instance embeddings
+        self.dim_type = args.dim_type  # Dimension of type embeddings
+        self.batch_size_ins = args.batch_size_ins  # Batch size for instance training
+        self.batch_size_type = args.batch_size_type  # Batch size for type training
+        self.batch_size_pair = args.batch_size_pair  # Batch size for pair training
+        self.model_save_path = Path(args.model_save_path)  # Path to save models
+        self.l1 = args.l1  # Whether to use L1 norm (otherwise L2)
+        self.margin_ins = args.margin_ins  # Margin for instance loss
+        self.margin_type = args.margin_type  # Margin for type loss
+        self.margin_pair = args.margin_pair  # Margin for pair loss
+        self.fold_ins = args.fold_ins  # Number of folds for instance training
+        self.fold_type = args.fold_type  # Number of folds for type training
+        self.fold_pair = args.fold_pair  # Number of folds for pair training
+        self.lr = args.lr  # Learning rate
+        self.weight_G = args.weight_G  # Weight for type training
+        self.weight_J = args.weight_J  # Weight for pair training
+        self.device = args.device  # Device to run training on (CPU/GPU)
+        self.test_step = args.test_step  # How often to run evaluation
+        self.best_metric = None  # Store best evaluation metric
+        self.save_times = args.save_times  # Identifier for saving
+        self.save_path = self.model_save_path / self.method / self.save_times  # Full save path
 
     def build(self, data):
+        """Initialize models, optimizers, and other training components"""
         self.summary(self.args)
         self.GeoKG = data
+        
+        # Initialize models based on selected method
         if self.method == 'transe':
             self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, self.dim_ins)
             self.rel_embs = nn.Embedding(self.GeoKG.georel_num, self.dim_ins)
@@ -222,45 +306,42 @@ class Join_trainer(Trainer):
             self.pair_model = HAKE_type(self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair,
                                         self.embedding_range, self.embedding_range_type)
 
-
         elif self.method == 'CompoundE':
-                self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, self.dim_ins)
-                self.rel_embs = nn.Embedding(self.GeoKG.georel_num,
-                                             self.dim_ins * 3)  # CompoundE uses 3 times the embedding size for relations
-                self.type_embs_ent = nn.Embedding(self.GeoKG.geotype_ent_num, self.dim_type)
-                self.type_embs_rel = nn.Embedding(self.GeoKG.geotype_rel_num,
-                                                  self.dim_type * 3)  # CompoundE uses 3 times the embedding size for relation types
+            self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, self.dim_ins)
+            self.rel_embs = nn.Embedding(self.GeoKG.georel_num, self.dim_ins * 3)
+            self.type_embs_ent = nn.Embedding(self.GeoKG.geotype_ent_num, self.dim_type)
+            self.type_embs_rel = nn.Embedding(self.GeoKG.geotype_rel_num, self.dim_type * 3)
 
-                # Initialize embeddings with uniform distribution within the specified range
-                self.embedding_range = (self.margin_ins + 2.0) / self.dim_ins
-                self.embedding_range_type = (self.margin_type + 2.0) / self.dim_type
-                nn.init.uniform_(self.ent_embs.weight, -self.embedding_range, self.embedding_range)
-                nn.init.uniform_(self.rel_embs.weight, -self.embedding_range, self.embedding_range)
-                nn.init.uniform_(self.type_embs_ent.weight, -self.embedding_range_type, self.embedding_range_type)
-                nn.init.uniform_(self.type_embs_rel.weight, -self.embedding_range_type, self.embedding_range_type)
+            # Initialize embeddings with uniform distribution within the specified range
+            self.embedding_range = (self.margin_ins + 2.0) / self.dim_ins
+            self.embedding_range_type = (self.margin_type + 2.0) / self.dim_type
+            nn.init.uniform_(self.ent_embs.weight, -self.embedding_range, self.embedding_range)
+            nn.init.uniform_(self.rel_embs.weight, -self.embedding_range, self.embedding_range)
+            nn.init.uniform_(self.type_embs_ent.weight, -self.embedding_range_type, self.embedding_range_type)
+            nn.init.uniform_(self.type_embs_rel.weight, -self.embedding_range_type, self.embedding_range_type)
 
-                # Initialize CompoundE models for instance, type, and pair
-                self.ins_model = CompoundE_ins(self.ent_embs, self.rel_embs, self.l1, self.margin_ins,
-                                               self.embedding_range)
-                self.type_model = CompoundE_ins(self.type_embs_ent, self.type_embs_rel, self.l1, self.margin_type,
-                                                self.embedding_range_type)
-                self.pair_model = HAKE_type(self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair,
-                                            self.embedding_range, self.embedding_range_type)
+            # Initialize CompoundE models for instance, type, and pair
+            self.ins_model = CompoundE_ins(self.ent_embs, self.rel_embs, self.l1, self.margin_ins,
+                                           self.embedding_range)
+            self.type_model = CompoundE_ins(self.type_embs_ent, self.type_embs_rel, self.l1, self.margin_type,
+                                            self.embedding_range_type)
+            self.pair_model = HAKE_type(self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair,
+                                        self.embedding_range, self.embedding_range_type)
 
         elif self.method == 'DistMult':
-            # 初始化嵌入层
+            # Initialize embedding layers
             self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, self.dim_ins)
             self.rel_embs = nn.Embedding(self.GeoKG.georel_num, self.dim_ins)
             self.type_embs_ent = nn.Embedding(self.GeoKG.geotype_ent_num, self.dim_type)
             self.type_embs_rel = nn.Embedding(self.GeoKG.geotype_rel_num, self.dim_type)
 
-            # Xavier初始化
+            # Xavier initialization
             nn.init.xavier_uniform_(self.ent_embs.weight)
             nn.init.xavier_uniform_(self.rel_embs.weight)
             nn.init.xavier_uniform_(self.type_embs_ent.weight)
             nn.init.xavier_uniform_(self.type_embs_rel.weight)
 
-            # 创建DistMult模型
+            # Create DistMult models
             self.ins_model = ins_model_DistMult(self.ent_embs, self.rel_embs, self.l1, self.margin_ins)
             self.type_model = ins_model_DistMult(self.type_embs_ent, self.type_embs_rel, self.l1, self.margin_type)
             self.pair_model = type_model_DistMult(self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair)
@@ -276,7 +357,7 @@ class Join_trainer(Trainer):
             nn.init.xavier_uniform_(self.type_embs_ent.weight)
             nn.init.xavier_uniform_(self.type_embs_rel.weight)
 
-            # 使用TransD模型
+            # Use TransD model
             self.ins_model = ins_model_transD(
                 self.ent_embs, self.rel_embs, self.l1, self.margin_ins, self.dim_ins
             )
@@ -287,23 +368,23 @@ class Join_trainer(Trainer):
                 self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair, self.dim_type
             )
         elif self.method == 'ComplEx':
-            # 复数嵌入维度是实际维度的一半
+            # Complex embedding dimension is half the actual dimension
             complex_dim_ins = self.dim_ins // 2
             complex_dim_type = self.dim_type // 2
 
-            # 初始化嵌入层
-            self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, complex_dim_ins * 2)  # 实部和虚部
-            self.rel_embs = nn.Embedding(self.GeoKG.georel_num, complex_dim_ins * 2)  # 实部和虚部
+            # Initialize embedding layers
+            self.ent_embs = nn.Embedding(self.GeoKG.geoent_num, complex_dim_ins * 2)  # Real and imaginary parts
+            self.rel_embs = nn.Embedding(self.GeoKG.georel_num, complex_dim_ins * 2)  # Real and imaginary parts
             self.type_embs_ent = nn.Embedding(self.GeoKG.geotype_ent_num, complex_dim_type * 2)
             self.type_embs_rel = nn.Embedding(self.GeoKG.geotype_rel_num, complex_dim_type * 2)
 
-            # Xavier初始化
+            # Xavier initialization
             nn.init.xavier_uniform_(self.ent_embs.weight)
             nn.init.xavier_uniform_(self.rel_embs.weight)
             nn.init.xavier_uniform_(self.type_embs_ent.weight)
             nn.init.xavier_uniform_(self.type_embs_rel.weight)
 
-            # 创建ComplEx模型
+            # Create ComplEx models
             self.ins_model = ins_model_ComplEx(self.ent_embs, self.rel_embs, self.l1, self.margin_ins)
             self.type_model = ins_model_ComplEx(
                 self.type_embs_ent, self.type_embs_rel, self.l1, self.margin_type
@@ -312,6 +393,7 @@ class Join_trainer(Trainer):
                 self.ent_embs, self.type_embs_ent, self.l1, self.margin_pair
             )
 
+        # Load pre-trained models if specified
         if self.args.load_model != None:
             if self.method == 'HAKE':
                 self.ins_model = self.loadmodel_HAKE(flag='ins')
@@ -344,23 +426,29 @@ class Join_trainer(Trainer):
                 self.ins_model = self.loadmodel_DistMult(flag='ins')
                 self.type_model = self.loadmodel_DistMult(flag='type')
                 self.pair_model = self.loadmodel_DistMult(flag='pair')
+                
+        # Move models to appropriate device
         self.ins_model.to(self.device)
         self.type_model.to(self.device)
         self.pair_model.to(self.device)
 
-        self.ins_optimizer = Optimizer(model=self.ins_model, learning_rate=self.lr,
-                                       type='Adam'),
-        self.type_optimizer = Optimizer(model=self.type_model, learning_rate=self.lr * self.weight_G,
-                                        type='Adam'),
+        # Initialize optimizers
+        self.ins_optimizer = Optimizer(model=self.ins_model, learning_rate=self.lr, type='Adam'),
+        self.type_optimizer = Optimizer(model=self.type_model, learning_rate=self.lr * self.weight_G, type='Adam'),
         self.pair_optimizer = Optimizer(model=self.pair_model, learning_rate=self.lr * self.weight_J, type='Adam'),
+        
+        # Initialize evaluator and early stopper
         self.evaluator = Evaluator(self.ins_model, self.type_model, self.pair_model, self.GeoKG, self.args)
         monitor = Monitor.FILTERED_MEAN_RANK_REL
         self.early_stopper = EarlyStopper(self.args.patience, monitor)
 
     def train_one_epoch(self, cur_epoch):
-        acc_ins_loss = 0
-        acc_type_loss = 0
-        acc_pair_loss = 0
+        """Train for one epoch across all three models (instance, type, pair)"""
+        acc_ins_loss = 0  # Accumulated instance loss
+        acc_type_loss = 0  # Accumulated type loss
+        acc_pair_loss = 0  # Accumulated pair loss
+        
+        # Calculate number of batches for each model
         num_batch1 = len(self.GeoKG.triplets_withtype["train"]) // self.batch_size_ins
         num_batch2 = len(self.GeoKG.triplets_type["train"]) // self.batch_size_type
         if num_batch2 < 1:
@@ -368,15 +456,20 @@ class Join_trainer(Trainer):
         num_batch3 = len(self.GeoKG.pairs_all["train"]) // self.batch_size_pair
         if num_batch3 < 1:
             num_batch3 = 1
+            
         if cur_epoch <= 1:
             print('num_batch =', num_batch1)
+            
+        # Set models to training mode
         self.ins_model.train()
         self.type_model.train()
         self.pair_model.train()
+        
+        # Train in specified order
         order = self.args.training_order.split(',')
         for item in order:
             if item == '0':
-                # G-ins training
+                # Instance-level training
                 progress1 = tqdm(range(self.fold_ins * num_batch1), ncols=150, ascii=True)
                 batches1 = self.gen_batch_ins(num_batch1, self.batch_size_ins, self.args.neg_rate, forever=True)
                 for _ in progress1:
@@ -405,7 +498,7 @@ class Join_trainer(Trainer):
                 progress1.close()
 
             elif item == '1':
-                # G-type training
+                # Type-level training
                 progress2 = tqdm(range(self.fold_type * num_batch2), ncols=150, ascii=True)
                 batches2 = self.gen_batch_type(num_batch2, self.batch_size_type, self.args.neg_rate, forever=True)
                 for _ in progress2:
@@ -417,7 +510,7 @@ class Join_trainer(Trainer):
                     batch['neg_h_type_ins'] = torch.LongTensor(np.array(data[3])).to(self.device)
                     batch['neg_r_type_ins'] = torch.LongTensor(np.array(data[4])).to(self.device)
                     batch['neg_t_type_ins'] = torch.LongTensor(np.array(data[5])).to(self.device)
-                    batch['subsampling_weight'] = torch.FloatTensor(data[6]).to(self.device)  # 32位浮点类型 torch.cat()
+                    batch['subsampling_weight'] = torch.FloatTensor(data[6]).to(self.device)
                     batch['batch_type'] = data[7]
                     if self.method == 'transe':
                         pos_loss, neg_loss, loss_type = self.train_batch_transe(batch=batch, model=self.type_model,
@@ -434,7 +527,7 @@ class Join_trainer(Trainer):
                 progress2.close()
 
             elif item == '2':
-                # P-type training
+                # Entity-type pair training
                 progress3 = tqdm(range(self.fold_pair * num_batch3), ncols=150, ascii=True)
                 batches3 = self.gen_batch_pair(num_batch3, self.batch_size_pair, self.args.neg_rate, forever=True)
                 for _ in progress3:
@@ -456,29 +549,41 @@ class Join_trainer(Trainer):
                     progress3.set_description('acc_pair_loss: %f, cur_pair_loss: %f' % (acc_pair_loss, loss_pair))
                 progress3.close()
 
+        # Store training results
         self.training_results.append([cur_epoch, acc_ins_loss, acc_type_loss, acc_pair_loss])
         return acc_ins_loss, acc_type_loss, acc_pair_loss
 
     def join_train(self):
+        """Main training loop that coordinates training across all models"""
         self.monitor = Monitor.FILTERED_MEAN_RANK_REL
         for cur_epoch in range(self.epochs):
+            # Train for one epoch
             ins_loss, type_loss, pair_loss = self.train_one_epoch(cur_epoch)
+            
+            # Check for training collapse
             if np.isnan(ins_loss) or np.isnan(type_loss) or np.isnan(pair_loss):
                 print("Training collapsed.")
                 return
+                
+            # Calculate total loss
             tot_loss = ins_loss + type_loss + pair_loss
             log.info('Join model Epoch [%s/%s]: %s', cur_epoch, self.epochs, tot_loss)
 
+            # Evaluate at specified intervals
             if cur_epoch % self.test_step == 0:
                 self.ins_model.eval()
                 with torch.no_grad():
+                    # Run evaluation
                     metrics = self.evaluator.mini_test(cur_epoch)
+                    # Store evaluation results
                     self.eval_results.append([cur_epoch,
                                       metrics['mr_rel'], metrics['fmr_rel'], metrics['mrr_rel'], metrics['fmrr_rel'],
                                       metrics['hits@1_rel'], metrics['filtered_hits@1_rel'], metrics['hits@3_rel'],
                                       metrics['filtered_hits@3_rel'],
                                       metrics['hits@5_rel'], metrics['filtered_hits@5_rel'], metrics['hits@10_rel'],
                                       metrics['filtered_hits@10_rel']])
+                    
+                    # Update best metric and save model if improved
                     if self.best_metric is None:
                         self.best_metric = metrics
                         self.save_model()
@@ -491,6 +596,8 @@ class Join_trainer(Trainer):
                             self.save_model()
                             self.best_metric = metrics
                     self.export_embeddings()
+                    
+        # Final evaluation after training completes
         self.ins_model.eval()
         self.type_model.eval()
         self.pair_model.eval()
@@ -503,6 +610,8 @@ class Join_trainer(Trainer):
                                       metrics['filtered_hits@3_rel'],
                                       metrics['hits@5_rel'], metrics['filtered_hits@5_rel'], metrics['hits@10_rel'],
                                       metrics['filtered_hits@10_rel']])
+        
+        # Save results and embeddings
         self.evaluator.metric.save_test_summary(self.save_path)
         self.export_embeddings()
         self.save_training_result()
@@ -510,6 +619,7 @@ class Join_trainer(Trainer):
         print("Done!")
 
     def save_model(self):
+        """Save model parameters to disk"""
         saved_path = self.save_path
         saved_path.mkdir(parents=True, exist_ok=True)
         torch.save(self.ins_model.state_dict(), str(saved_path / "ins_model.vec.pt"))
@@ -519,11 +629,13 @@ class Join_trainer(Trainer):
         np.save(save_path_config, self.args)
 
     def save_training_result(self):
+        """Save training results to CSV file"""
         df = pd.DataFrame(self.training_results, columns=['Epochs', 'ins_Loss', 'type_loss', 'pair_Loss'])
         with open(str(self.save_path / ('_Training_results_' + self.save_times + '.csv')), 'w', encoding='utf-8') as fh:
             df.to_csv(fh)
 
     def save_evaluator_result(self):
+        """Save evaluation results to CSV file"""
         df = pd.DataFrame(self.eval_results, columns=['epoch', 'mr_rel', 'fmr_rel', 'mrr_rel', 'fmrr_rel', 'hits@1_rel',
                                                       'filtered_hits@1_rel',
                                                       'hits@3_rel', 'filtered_hits@3_rel', 'hits@5_rel',
@@ -534,29 +646,37 @@ class Join_trainer(Trainer):
             df.to_csv(fh)
 
     def export_embeddings(self):
+        """Export learned embeddings to files for visualization or further use"""
         save_path = self.save_path
         save_path.mkdir(parents=True, exist_ok=True)
 
+        # Get label mappings
         idx2ent = self.GeoKG.geoent_tokens
         idx2rel = self.GeoKG.georel_tokens
         idx2type_ent = self.GeoKG.geotype_ent_tokens
         idx2type_rel = self.GeoKG.geotype_rel_tokens
+        
+        # Save entity labels
         with open(str(save_path / "ent_labels.tsv"), 'w', encoding='utf-8') as l_export_file:
             for label in idx2ent.values():
                 l_export_file.write(label + "\n")
 
+        # Save relation labels
         with open(str(save_path / "rel_labels.tsv"), 'w', encoding='utf-8') as l_export_file:
             for label in idx2rel.values():
                 l_export_file.write(label + "\n")
 
+        # Save entity type labels
         with open(str(save_path / "type_ent_labels.tsv"), 'w', encoding='utf-8') as l_export_file:
             for label in idx2type_ent.values():
                 l_export_file.write(label + "\n")
 
+        # Save relation type labels
         with open(str(save_path / "type_rel_labels.tsv"), 'w', encoding='utf-8') as l_export_file:
             for label in idx2type_rel.values():
                 l_export_file.write(label + "\n")
 
+        # Save instance embeddings
         ins_embed = self.ins_model.parameter_list
         type_embed = self.type_model.parameter_list
         for para in ins_embed:
@@ -567,6 +687,8 @@ class Join_trainer(Trainer):
                 with open(str(save_path / ("%s.tsv" % stored_name)), 'w', encoding='utf-8') as v_export_file:
                     for idx in all_ids:
                         v_export_file.write("\t".join([str(x) for x in all_embs[idx]]) + "\n")
+                        
+        # Save type embeddings
         for para in type_embed:
             all_ids = list(range(0, int(type_embed[para].weight.shape[0])))
             stored_name = para
@@ -577,6 +699,7 @@ class Join_trainer(Trainer):
                         v_export_file.write("\t".join([str(x) for x in all_embs[idx]]) + "\n")
 
     def loadmodel_HAKE(self, flag):
+        """Load pre-trained HAKE model"""
         try:
             model_obj = getattr(importlib.import_module("model"), 'HAKE_ins')
             model_obj_pair = getattr(importlib.import_module("model"), 'HAKE_type')
@@ -598,6 +721,7 @@ class Join_trainer(Trainer):
             log.error("%s model has not been implemented." % (self.method))
 
     def loadmodel_rotate(self, flag):
+        """Load pre-trained RotatE model"""
         try:
             model_obj = getattr(importlib.import_module("model"), 'ins_model_rotate')
             model_obj_pair = getattr(importlib.import_module("model"), 'type_model_rotate')
@@ -617,6 +741,7 @@ class Join_trainer(Trainer):
             log.error("%s model has not been implemented." % (self.method))
 
     def loadmodel_transe(self, flag):
+        """Load pre-trained TransE model"""
         try:
             model_obj = getattr(importlib.import_module("model"), 'ins_model_transe')
             model_obj_pair = getattr(importlib.import_module("model"), 'type_model_transe')
@@ -634,8 +759,8 @@ class Join_trainer(Trainer):
         except ModuleNotFoundError:
             log.error("%s model has not been implemented." % (self.method))
 
-
     def loadmodel_CompoundE(self, flag):
+        """Load pre-trained CompoundE model"""
         try:
             model_obj = getattr(importlib.import_module("model"), 'ins_model_transD')
             model_obj_pair = getattr(importlib.import_module("model"), 'type_model_transD')
@@ -654,6 +779,7 @@ class Join_trainer(Trainer):
             log.error("%s model has not been implemented." % (self.method))
 
     def loadmodel_DistMult(self, flag):
+        """Load pre-trained DistMult model"""
         try:
             model_obj = getattr(importlib.import_module("model"), 'ins_model_DistMult')
             model_obj_pair = getattr(importlib.import_module("model"), 'type_model_DistMult')
@@ -672,6 +798,7 @@ class Join_trainer(Trainer):
             log.error("DistMult model has not been implemented.")
 
     def loadmodel_transD(self, flag):
+        """Load pre-trained TransD model"""
         try:
             model_obj_ins = getattr(importlib.import_module("model"), 'ins_model_transD')
             model_obj_type = getattr(importlib.import_module("model"), 'type_model_transD')
@@ -697,6 +824,7 @@ class Join_trainer(Trainer):
             log.error("TransD model has not been implemented.")
 
     def loadmodel_ComplEx(self, flag):
+        """Load pre-trained ComplEx model"""
         try:
             model_obj_ins = getattr(importlib.import_module("model"), 'ins_model_ComplEx')
             model_obj_type = getattr(importlib.import_module("model"), 'type_model_ComplEx')
@@ -722,6 +850,17 @@ class Join_trainer(Trainer):
             log.error("ComplEx model has not been implemented.")
 
     def infer_rels(self, h_name, t_name, topk=5):
+        """
+        Infer relationships between two entities
+        
+        Args:
+            h_name: Head entity name
+            t_name: Tail entity name
+            topk: Number of top relationships to return
+        
+        Returns:
+            Dictionary of inferred relationships with their distances
+        """
         idx2ent = self.GeoKG.geoent_tokens
         idx2rel = self.GeoKG.georel_tokens
         h = list(idx2ent.values()).index(h_name)
