@@ -1,139 +1,70 @@
-# JT-KGE: A Joint Knowledge-Graph Embedding Framework
+## Repository Overview
+This project implements the JT-KGE framework for jointly training geographic knowledge graph embedding models. It supports multiple embedding methods (TransE, RotatE, HAKE, CompoundE, DistMult, TransD, ComplEx) and provides end-to-end data processing, training, and evaluation pipelines for geographic KG alignment tasks.
 
-**JT-KGE** (Joint Type-based Knowledge Graph Embedding) is a flexible PyTorch framework for learning entity, relation and type representations in Knowledge Graphs. It supports **TransE, RotatE, HAKE, DistMult, TransD, ComplEx** and **CompoundE**, and performs **joint training** over instance-level triples, type-level triples and entity-type pairs.
+The repository contains two main components:
+1. **A multi-model joint-training framework for geographic KG embeddings**
+2. **A plug-and-play tool for entity-relation inference and visualization**
 
----
-
-## 1. Overview
-- **Instance-level embeddings** (G-ins): relations between entities  
-- **Type-level embeddings** (G-type): taxonomic relations between types  
-- **Entity–type pairs** (P-type): membership of entities in semantic types  
-
-Includes adversarial negative sampling, early stopping and comprehensive link-prediction metrics (MR, MRR, Hits@k).
-
----
-
-## 2. Features
-- **7 embedding models** out-of-the-box  
-- **Joint training** with tunable weighting  
-- **Self-adversarial negative sampling**  
-- **Early stopping** on filtered MR or MRR  
-- **Automatic checkpointing & embedding export**
-
----
-
-## 3. Repository Structure
-```
-JT-KGE/
-├── data_helper.py   # data loading & indexing
-├── model.py         # all embedding models
-├── loss.py          # MarginLoss / LogisticLoss
-├── optimizer.py     # Adam / Adagrad / SGD wrapper
-├── evaluator.py     # link-prediction metrics
-├── earlystopper.py  # patience-based early stop
-├── train.py         # training loop
-├── run.py           # CLI entry point
-├── utils.py
-├── model/           # pre-trained weights (optional)
-├── sample_data/     # toy dataset
-└── README.md
-```
-
----
-
-## 4. Installation
+## Environment Setup
+All runtime dependencies are listed in `requirements.txt`. Install them with:
 ```bash
-pip install torch tqdm numpy pandas
+pip install -r requirements.txt
 ```
 
----
+## Dataset
+- The dataset is located in the `sample data` folder and contains triples for geographic KG embedding.
 
-## 5. Quick Start
+## Running the Code
 
-### 5.1 Data Format  
-Place files in `sample_data/`:
+### Multi-Model Joint-Training Framework
+- **Entry point**: `run.py`  
+- One-command start for training and testing; model type, dimension, batch size, etc. can be set via CLI.  
+- After training, model weights, embeddings, logs, and evaluation results are automatically saved under `./model/`.
 
-```
-sample_data/
-├── train.txt          # h r t h_type t_type
-├── valid.txt
-├── test.txt
-├── train_type.txt     # h r t  (type-level)
-├── valid_type.txt
-└── test_type.txt
-```
+### Plug-and-Play Entity-Relation Inference & Visualization
+- **Inference script**: `testRel.py`  
+- Copy the trained `ent.tsv`, `rel.tsv`, `ent_labels.tsv`, and `rel_labels.tsv` into the same directory, then run the script to interactively input any entity pair and obtain the Top-K predicted relations in real time.  
+- No re-training required—useful for demos, quick validation, or downstream integration.
 
-### 5.2 Train a Model
-```bash
-python run.py --method CompoundE --device cuda
-```
+## Experimental Procedures
 
-### 5.3 Key Arguments
-| Flag            | Description                 | Default |
-|-----------------|-----------------------------|---------|
-| `--method`      | transe / rotate / hake / ... | DistMult |
-| `--epochs`      | training epochs             | 200     |
-| `--dim_ins`     | entity/relation dim         | 200     |
-| `--dim_type`    | type dim                    | 200     |
-| `--lr`          | learning rate               | 0.001   |
-| `--neg_rate`    | negative samples / pos      | 5       |
-| `--patience`    | early-stop patience         | 3       |
+### ① Multi-Model Performance Comparison (Table 4 Link-Prediction Results)
+1. Open `run.py` and set `--method` to CompoundE, HAKE, TransE, RotatE, DistMult, and ComplEx in turn, all using the train/valid/test triples in `sample data`.
+2. Run  
+   ```bash
+   python run.py --method CompoundE --epochs 200 --lr 0.001 --dim_ins 200 --neg_rate 5
+   ```  
+   Wait for training to finish; results are automatically generated in `./model/CompoundE/savefold_name/`.
+3. Repeat step 2 for all models, collect **MR, MRR, Hits@1/3/5/10** on the test set, and fill them into Table 4.
 
----
+### ② Entity-Relation Direction Visualization (Tables 5 & 6)
+1. Copy the trained `ent.tsv`, `rel.tsv`, `ent_labels.tsv`, `rel_labels.tsv` into the same directory as `testRel.py`.
+2. Run  
+   ```bash
+   python testRel.py
+   ```
+3. When prompted, enter the entity pairs:  
+   - “Jiaozhou City & Jiali County”  
+   - “Yongsheng County & Suijiang County”  
+   - “Quanshan District & Lanling County”  
+4. The script outputs the Top-3 predicted directions (e.g., South-Southwest-West). Compare the results with baseline models (HAKE-base, CompoundE-base).
 
-## 6. Usage Examples
-```bash
-# Train RotatE
-python run.py --method rotate --dim_ins 400 --lr 0.0001 --device cuda
+### ③ Varying Training-Set Ratio Comparison (Table 7)
+1. Four pre-split training sets are provided in the same directory as `run.py`:
+   - `./sample data/train_10.txt`
+   - `./sample data/train_30.txt`
+   - `./sample data/train_50.txt`
+   - `./sample data/train_80.txt`
 
-# Resume from checkpoint
-python run.py --method CompoundE --load_model ./model/CompoundE/savefold_name
-```
+2. For the 10 % example, overwrite the original file:  
+   ```bash
+   cp sample\ data/train_10.txt sample\ data/train.txt
+   ```
 
----
+3. Run (any model; here we use CompoundE):  
+   ```bash
+   python run.py --method CompoundE --epochs 200 --lr 0.001 --dim_ins 200 --neg_rate 5
+   ```  
+   After training, record **MR, MRR, Hits@10** on the test set.
 
-## 7. Output Files
-After training, `./model/{method}/{save_times}/` contains:
-- `ins_model.vec.pt`, `type_model.vec.pt`, `pair_model.vec.pt`  
-- `*_labels.tsv` (id → name)  
-- `*_Training_results_*.csv` & `*_Eval_results_*.csv`  
-- `config.npy`
-
----
-
-## 8. Extending the Framework
-1. **New model**: inherit `nn.Module` in `model.py` and register in `Join_trainer.build()`.  
-2. **Custom loss**: subclass `Loss` in `loss.py`.  
-3. **New metrics**: modify `evaluator.py`.
-
----
-
-## 9. Experimental Results
-
-Link-prediction on the provided benchmark:
-
-| Model               | MR↓   | MRR↑  | Hits@1↑ | Hits@3↑ | Hits@5↑ | Hits@10↑ |
-|---------------------|-------|-------|---------|---------|---------|----------|
-| **CompoundE (ours)**| **9.86** | **0.308** | **0.173** | **0.328** | **0.435** | **0.639** |
-| HAKE (ours)         | 12.24 | 0.261 | 0.137 | 0.264 | 0.349 | 0.542 |
-| TransE (ours)       | 14.42 | 0.262 | 0.149 | 0.262 | 0.338 | 0.521 |
-| RotatE (ours)       | 14.76 | 0.232 | 0.125 | 0.233 | 0.306 | 0.439 |
-| DistMult (ours)     | 17.42 | 0.248 | 0.151 | 0.250 | 0.329 | 0.329 |
-| ComplEx (ours)      | 0.16  | 0.271 | 0.176 | 0.262 | 0.349 | 0.481 |
-
-Comparison with original baselines:
-
-| Model        | MR↓   | MRR↑  | Hits@1↑ | Hits@3↑ | Hits@5↑ | Hits@10↑ |
-|--------------|-------|-------|---------|---------|---------|----------|
-| CompoundE    | 15.77 | 0.255 | 0.134 | 0.255 | 0.340 | 0.537 |
-| HAKE         | 13.54 | 0.262 | 0.143 | 0.277 | 0.359 | 0.503 |
-| TransE       | 16.28 | 0.265 | 0.164 | 0.259 | 0.339 | 0.485 |
-| RotatE       | 16.15 | 0.203 | 0.104 | 0.192 | 0.262 | 0.402 |
-| DistMult     | 18.10 | 0.240 | 0.146 | 0.243 | 0.301 | 0.410 |
-| ComplEx      | 15.28 | 0.263 | 0.164 | 0.265 | 0.346 | 0.468 |
-
-> Bold numbers denote best performance in our reproduction.  
-> “(ours)” indicates results reproduced and fine-tuned within JT-KGE.
-
----
-
+4. Repeat steps 2–3 for `train_30/50/80.txt` and summarize the four sets of metrics.
