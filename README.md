@@ -49,7 +49,7 @@ pip install -r requirements.txt
    - “Quanshan District & Lanling County”  
 4. The script outputs the Top-3 predicted directions (e.g., South-Southwest-West). Compare the results with baseline models (HAKE-base, CompoundE-base).
 
-### ③ Varying Training-Set Ratio Comparison (Table 7)
+### ③ Varying Training-Set Ratio Comparison (Figure 3)
 1. Four pre-split training sets are provided in the same directory as `run.py`:
    - `./sample data/train_10.txt`
    - `./sample data/train_30.txt`
